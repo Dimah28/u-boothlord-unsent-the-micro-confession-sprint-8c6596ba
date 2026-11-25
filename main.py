@@ -10,43 +10,71 @@ Python standard library only; deterministic: the same text every run.
 import os
 import sys
 
-ENTRY = (
-    "To: my older brother\n"
+# Gate: 1-260 characters, exactly 2 lines, no trailing newline.
+MIN_CHARS = 1
+MAX_CHARS = 260
+MAX_MESSAGE_CHARS = 200
+
+ENTRY_LINES = (
+    "To: my older brother",
     "i still owe you the two hundred i borrowed for mum's medicine "
     "in 2019, and every payday i tell myself next month, because "
     "paying it back means admitting i spent three years pretending "
-    "i forgot"
+    "i forgot",
 )
 
 
+def build_entry() -> str:
+    """Join the entry lines into the exact text that gets written."""
+    return "\n".join(ENTRY_LINES)
+
+
 def validate_entry(text: str) -> str:
-    """Return the entry if it passes the gate, else raise ValueError."""
+    """Return the entry if it passes the gate, else fail loudly.
+
+    Checks: non-blank, 1-260 characters, exactly two lines, first line
+    a To: line, message line non-blank and at most 200 characters.
+    Raises SystemExit with a clear message on any failure so a bad
+    entry can never be written silently.
+    """
     if not text.strip():
-        raise ValueError("entry must not be blank")
-    if not 1 <= len(text) <= 260:
-        raise ValueError("entry must be 1-260 characters, got %d" % len(text))
+        raise SystemExit("invalid entry: entry must not be blank")
+    if not MIN_CHARS <= len(text) <= MAX_CHARS:
+        raise SystemExit(
+            "invalid entry: entry must be %d-%d characters, got %d"
+            % (MIN_CHARS, MAX_CHARS, len(text))
+        )
     lines = text.split("\n")
     if len(lines) != 2:
-        raise ValueError("entry must be exactly two parts: a To: line and one message line")
+        raise SystemExit(
+            "invalid entry: entry must be exactly two lines "
+            "(a To: line and one message line), got %d" % len(lines)
+        )
     if not lines[0].startswith("To: "):
-        raise ValueError("first line must be a To: line")
+        raise SystemExit("invalid entry: first line must be a To: line")
     if not lines[1].strip():
-        raise ValueError("message line must not be blank")
-    if len(lines[1]) > 200:
-        raise ValueError("message line must be at most 200 characters, got %d" % len(lines[1]))
+        raise SystemExit("invalid entry: message line must not be blank")
+    if len(lines[1]) > MAX_MESSAGE_CHARS:
+        raise SystemExit(
+            "invalid entry: message line must be at most %d characters, "
+            "got %d" % (MAX_MESSAGE_CHARS, len(lines[1]))
+        )
     return text
 
 
-def main() -> int:
-    try:
-        text = validate_entry(ENTRY)
-    except ValueError as exc:
-        print("invalid entry: %s" % exc, file=sys.stderr)
-        return 1
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+def write_entry(text: str, out_dir: str) -> str:
+    """Write the validated entry to entry.txt; return the file path."""
     os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, "entry.txt"), "w", encoding="utf-8") as f:
+    path = os.path.join(out_dir, "entry.txt")
+    with open(path, "w", encoding="utf-8") as f:
         f.write(text)
+    return path
+
+
+def main() -> int:
+    text = validate_entry(build_entry())
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+    write_entry(text, out_dir)
     return 0
 
 
